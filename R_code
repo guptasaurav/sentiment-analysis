@@ -1,0 +1,72 @@
+#Load required packages
+library(ggplot2)
+library(lubridate)
+library(Scale)
+library(reshape2)
+library(tm)
+library(SnowballC)
+library(wordcloud)
+library(RColorBrewer)
+library(stringr)
+library(syuzhet) 
+library(dplyr) 
+
+#get the data from whatsapp chat 
+text <- readLines("chat.txt")
+class(text) ## check the class here, will be character 
+#let us create the corpus
+corpus_ct <- Corpus(VectorSource(text)) ## create corpus of the character vector , tm package
+corpus_ct ## doesnot behave like standart dataframes 
+inspect(corpus_ct[1])  ## see the first line or document in the the corpus
+
+
+#clean our chat data
+transfrm <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+corpus_ct <- tm_map(corpus_ct, transfrm, "/")
+corpus_ct <- tm_map(corpus_ct, transfrm, "@")
+corpus_ct <- tm_map(corpus_ct, transfrm, "\\|")
+corpus_ct <- tm_map(corpus_ct,transfrm,"PM")
+corpus_ct <- tm_map(corpus_ct, content_transformer(tolower))
+corpus_ct <- tm_map(corpus_ct, removeNumbers)
+corpus_ct <- tm_map(corpus_ct, removeWords, stopwords("english"))
+corpus_ct <- tm_map(corpus_ct, removeWords, c("name1","name2"))
+corpus_ct <- tm_map(corpus_ct, removePunctuation)
+corpus_ct <- tm_map(corpus_ct, stripWhitespace)
+corpus_ct <- tm_map(corpus_ct, stemDocument)
+
+
+inspect(corpus_ct[1:10])
+
+#create the document term matrix, matrix with frequency of words 
+dtm <- TermDocumentMatrix(corpus_ct)
+mat <- as.matrix(dtm)
+mat
+v <- sort(rowSums(mat),decreasing=TRUE)
+
+#Data frame
+data <- data.frame(word = names(v),freq=v)
+head(data, 10)
+
+data
+#generate the wordcloud, it will take words from our data frame and their frequencies
+wordcloud(words = data$word, freq = data$freq, min.freq = 1,
+          max.words=300, random.order=FALSE, rot.per=0.35,
+          colors=brewer.pal(8, "Dark2"))
+
+#fetch sentiment words from texts
+Sentiment <- get_nrc_sentiment(text)
+head(Sentiment)
+text <- cbind(text,Sentiment)
+
+get_nrc
+#count the sentiment words by category
+TotalSentiment <- data.frame(colSums(text[,c(2:11)]))
+names(TotalSentiment) <- "count"
+TotalSentiment <- cbind("sentiment" = rownames(TotalSentiment), TotalSentiment)
+rownames(TotalSentiment) <- NULL
+
+#total sentiment score of all texts
+ggplot(data = TotalSentiment, aes(x = sentiment, y = count)) +
+  geom_bar(aes(fill = sentiment), stat = "identity") +
+  theme(legend.position = "none") +
+  xlab("Sentiment") + ylab("Total Count") + ggtitle("Total Sentiment Score")
